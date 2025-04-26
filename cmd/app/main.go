@@ -19,10 +19,13 @@ func main() {
 	flag.Parse()
 	fmt.Println(*configFile)
 
+	//Load config
 	cfg, err := config.LoadConfig(*configFile)
 	if err != nil {
 		log.Fatalf("Cannot load config: %v", err)
 	}
+
+	//Backend initialization
 	bal := balancer.New(func() []string {
 		var urls []string
 		for _, b := range cfg.Backends {
@@ -30,6 +33,8 @@ func main() {
 		}
 		return urls
 	}())
+
+	// Rate limiter setup
 	defLimit := balancer.Config{Capacity: 100, RatePerSec: 10}
 	clientLimits := make(map[string]balancer.Config)
 	for id, l := range cfg.Clients {
@@ -39,16 +44,20 @@ func main() {
 		}
 	}
 	rl := balancer.NewRateLimiter(clientLimits, defLimit)
+
+	// Health checks (background goroutine with fixed interval)
 	balancer.StartHealthChecks(bal, cfg.CheckFreq)
 
 	prx := &balancer.Proxy{Balancer: bal, RateLimiter: rl}
 	apiH := &api.API{RateLimiter: rl}
 
+	// API routing
 	mux := http.NewServeMux()
 	mux.Handle("/", prx)
 	mux.HandleFunc("/clients", apiH.AddClient)
 	mux.HandleFunc("/clients/", apiH.DeleteClient)
 
+	// Server startup
 	srv := &http.Server{Addr: cfg.Listen, Handler: mux}
 	go func() {
 		logger.L.Printf("Listening on %s", cfg.Listen)
