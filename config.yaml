@@ -1,0 +1,12 @@
+listen: ":8080"
+healthcheck_frequency: 10
+backends:
+  - url: "http://backend1:8081"
+  - url: "http://backend2:8082"
+clients:
+  user1:
+    capacity: 50
+    rate_per_sec: 5
+  user2:
+    capacity: 100
+    rate_per_sec: 20
